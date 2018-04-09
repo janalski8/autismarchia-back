@@ -2,7 +2,6 @@ use utils::ipoint::IPoint;
 use std::collections::HashSet;
 use utils::fpoint::FPoint;
 use utils::point::Point;
-use std::fmt::Debug;
 
 pub fn dev() -> f32 {
     2.0/5.0
@@ -10,18 +9,17 @@ pub fn dev() -> f32 {
 
 pub fn visibility_set(transparent: &HashSet<IPoint>,
                       size: &IPoint,
-                      from: &IPoint,
-                      range: f32) -> HashSet<IPoint> {
+                      origin: &IPoint,
+                      sight_range: f32) -> HashSet<IPoint> {
 
-    let diff_point = (FPoint{x: range, y: range}).ceil() + IPoint{x: 1, y: 1};
-    let points_range = (*from - diff_point).range(*from + diff_point);
+    let origin_square = origin.square_around(sight_range.ceil() as i32);
     let room_range = size.zrange();
-    let mut result: HashSet<IPoint> = points_range.iterator()
-        .filter(|p| room_range.has(p))
-        .filter(|p| p.dist(from) <= range)
-        .filter(|p| is_visible(transparent, from, p))
+    let candidates = origin_square.intersect(&room_range);
+    let mut result: HashSet<IPoint> = candidates.iter()
+        .filter(|p| p.dist(origin) <= sight_range)
+        .filter(|p| is_visible(transparent, origin, p))
         .collect();
-    result.insert(*from);
+    result.insert(*origin);
     result
 }
 
@@ -45,9 +43,6 @@ fn sight_paths(p1: &IPoint, p2: &IPoint) -> Vec<(FPoint, FPoint)> {
 }
 
 fn line_of_sight(p1: FPoint, p2: FPoint) -> Vec<IPoint> {
-    //print("path".to_string());
-    //print(p1.to_string());
-    //print(p2.to_string());
     let negx = IPoint{x: -1, y: 0};
     let negy = IPoint{x: 0, y: -1};
 
@@ -74,17 +69,5 @@ fn line_of_sight(p1: FPoint, p2: FPoint) -> Vec<IPoint> {
         current = p1 + (step * i);
         i += 1.0;
     }
-    //print(vec_to_string(&result));
     result
-}
-
-fn vec_to_string<T>(vec: &Vec<T>) -> String
-    where T: Debug {
-
-    use core::fmt::Write;
-    let mut buf = String::new();
-    buf.write_fmt(format_args!("{:?}", vec))
-        .expect("a Display implementation return an error unexpectedly");
-    buf.shrink_to_fit();
-    buf
 }

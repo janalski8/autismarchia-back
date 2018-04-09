@@ -21,7 +21,7 @@ pub trait Tiles {
 }
 impl Tiles for TileMap {
     fn build_room(&mut self, room: &IRange) {
-        for point in room.iterator() {
+        for point in room.iter() {
             self.insert(point, Tile::Room);
         }
     }

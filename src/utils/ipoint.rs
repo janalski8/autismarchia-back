@@ -59,6 +59,12 @@ impl IPoint {
     pub fn zrange(self) -> IRange {
         IRange {start: IPoint::zero(), end: self}
     }
+    pub fn square_around(self, radius: i32) -> IRange {
+        IRange {
+            start: self - IPoint{x: radius, y: radius},
+            end: self + IPoint{x: radius + 1, y: radius + 1}
+        }
+    }
 }
 
 impl Point<IPoint> for IPoint {

@@ -1,100 +1,106 @@
-use std::fmt::{Formatter, Debug, Display, Error};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use state::object::{Idx, Object, TObject};
 use utils::ipoint::IPoint;
 
 pub struct Level {
-    pub idx: Idx,
-    pub size: IPoint,
-    pub entities: HashMap<Idx, Entity>,
-}
-pub struct Layout<'a> {
-    pub tiles: HashMap<IPoint, Vec<&'a Entity>>,
-    pub size: IPoint,
-}
-pub struct Entity {
-    pub object: Object,
-    pub level: Idx,
-    pub position: IPoint
+    idx: Idx,
+    size: IPoint,
+    tiles: HashMap<IPoint, Vec<Entity>>,
+    positions: HashMap<Idx, IPoint>
 }
 
-impl<'a> Display for Layout<'a> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{:?}", self)
-    }
+pub struct Entity {
+    object: Object,
+    level: Idx,
+    position: IPoint
 }
-impl<'a> Debug for Layout<'a> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let mut result: Result<(), Error> = Result::Ok(());
-        let size = self.size;
-        for y in 0..(size.y) {
-            for x in 0..(size.x) {
-                let vecopt: Option<&Vec<&Entity>> = self.tiles.get(&IPoint {x, y});
-                let chr = match vecopt.unwrap().iter().max_by_key(|e| e.object.get_ordinal()) {
-                    None => ' ',
-                    Some(entity) => match entity.object {
-                        Object::Player {..} => '@',
-                        Object::Wall {..} => '#',
-                        Object::Floor {..} => '.',
-                    }
-                };
-                result = result.and_then(|()| write!(f, "{}", chr));
-            }
-            result = result.and_then(|()| write!(f, "\n"));
-        }
-        result
+
+impl Entity {
+    fn new(object: Object, level: Idx, position: IPoint) -> Entity {
+        Entity {object, level, position}
+    }
+    pub fn level(&self) -> &Idx {
+        &self.level
+    }
+    pub fn position(&self) -> &IPoint {
+        &self.position
+    }
+    pub fn object(&self) -> &Object {
+        &self.object
+    }
+    pub fn object_mut(&mut self) -> &mut Object {
+        &mut self.object
     }
 }
 
 impl Level {
     pub fn new(idx: Idx, size: IPoint) -> Level {
-        Level {
-            idx,
-            size,
-            entities: HashMap::new()
+        let mut tiles = HashMap::new();
+        for pos in size.zrange().iter() {
+            tiles.insert(pos, Vec::new());
         }
+        Level {idx, size, tiles, positions: HashMap::new()}
     }
-    pub fn add_entity(&mut self, object: Object, position: IPoint) {
+
+    pub fn idx(&self) -> &Idx {
+        &self.idx
+    }
+    pub fn size(&self) -> &IPoint {
+        &self.size
+    }
+    pub fn tiles(&self) -> &HashMap<IPoint, Vec<Entity>> {
+        &self.tiles
+    }
+    pub fn positions(&self) -> &HashMap<Idx, IPoint> {
+        &self.positions
+    }
+
+    pub fn add_entity(&mut self, object: Object, position: IPoint) -> &mut Entity {
         let idx = object.get_idx();
-        let e = Entity {
-            object,
-            position,
-            level: self.idx,
+        match self.positions.entry(idx) {
+            Entry::Occupied(_) => panic!(),
+            Entry::Vacant(e) => e.insert(position),
         };
-        self.entities.insert(idx, e);
+
+        let entity = Entity::new(object, self.idx, position);
+        let tile = self.tiles.get_mut(&position).unwrap();
+        tile.push(entity);
+        tile.last_mut().unwrap()
     }
-    pub fn remove_entity(&mut self, idx: &Idx) -> Option<Entity> {
-        self.entities.remove(idx)
+    pub fn remove_entity(&mut self, idx: Idx) -> Option<Entity> {
+        self.positions.remove(&idx)
+            .map(|pos| {
+                let tile = self.tiles.get_mut(&pos).unwrap();
+                let index = tile.iter().position(|e| e.object.get_idx() == idx).unwrap();
+                tile.remove(index)
+            })
     }
-    pub fn move_entity(&mut self, idx: &Idx, position: IPoint) {
-        self.remove_entity(idx).map(|entity| self.add_entity(entity.object, position));
+    pub fn move_entity<'a>(&'a mut self, idx: Idx, new_position: IPoint) -> Option<&'a mut Entity> {
+        let removed = self.remove_entity(idx);
+        match removed {
+            None => None,
+            Some(entity) => Some(self.add_entity(entity.object, new_position)),
+        }
     }
+
+    pub fn get_tile(&self, position: &IPoint) -> Option<&Vec<Entity>> {
+        self.tiles.get(position)
+    }
+    pub fn get_position(&self, idx: &Idx) -> Option<&IPoint> {
+        self.positions.get(idx)
+    }
+
     pub fn get_entity(&self, idx: &Idx) -> Option<&Entity> {
-        self.entities.get(idx)
+        self.get_position(idx)
+            .and_then(|pos| self.tiles.get(pos))
+            .and_then(|tile| tile.iter().find(|e| e.object.get_idx() == *idx))
     }
-    pub fn get_mut_entity(&mut self, idx: &Idx) -> Option<&mut Entity> {
-        self.entities.get_mut(idx)
-    }
-    pub fn get_tile(&self, position: &IPoint) -> Vec<&Entity> {
-        let mut result = Vec::new();
-        for (_key, entity) in self.entities.iter() {
-            if &entity.position == position {
-                result.push(entity);
-            }
-        }
-        result
-    }
-    pub fn build_layout(&self) -> Layout {
-        let mut result = HashMap::new();
-        for p in self.size.zrange().iterator() {
-            result.insert(p, Vec::new());
-        }
-        for (_key, entity) in self.entities.iter() {
-            result.get_mut(&entity.position).unwrap().push(entity);
-        }
-        return Layout {
-            tiles: result,
-            size: self.size
+    pub fn get_mut_entity<'a>(&'a mut self, idx: &Idx) -> Option<&'a mut Entity> {
+        let tile = match self.positions.get(idx) {
+            None => None,
+            Some(p) => self.tiles.get_mut(p),
         };
+        tile.and_then(|t| t.iter_mut().find(|e| e.object.get_idx() == *idx))
     }
 }

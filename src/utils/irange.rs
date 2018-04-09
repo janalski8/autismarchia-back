@@ -28,8 +28,14 @@ impl IRange {
         return point.x < self.end.x && point.y < self.end.y &&
             point.x >= self.start.x && point.y >= self.start.y;
     }
-    pub fn iterator(&self) -> IITer {
+    pub fn iter(&self) -> IITer {
         IITer::new(*self)
+    }
+    pub fn intersect(&self, other: &IRange) -> IRange {
+        IRange {
+            start: self.start.top(&other.start),
+            end: self.end.bottom(&other.end)
+        }
     }
 }
 

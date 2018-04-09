@@ -4,12 +4,11 @@ use state::object::{Idx, TObject};
 use state::world::World;
 use utils::ipoint::IPoint;
 use state::level::Level;
-use state::level::Entity;
 use state::object::Pixel;
 use std::collections::HashSet;
 use logic::visibility::visibility_set;
-use state::level::Layout;
 use utils::point::Point;
+use state::level::Entity;
 
 
 pub struct View {
@@ -59,33 +58,33 @@ impl PlayerData {
             }
         };
 
-        let new_pos = level.size.zrange().clip(&(dir + entity.position));
-        if new_pos == entity.position {
+        let position = *entity.position();
+        let new_pos = level.size().zrange().clip(&(dir + position));
+        if new_pos == position {
             self.messages.push("you hit the wall".to_string());
             return;
         }
 
-        let tile = level.get_tile(&new_pos);
-        let obstacle = tile.iter().filter(|e| e.object.is_blocking()).next();
+        let tile = level.get_tile(&new_pos).unwrap();
+        let obstacle = tile.iter().filter(|e| e.object().is_blocking()).next();
         match obstacle {
-            Some(obs) => self.messages.push("you hit the ".to_string() + &obs.object.to_string()),
+            Some(obs) => self.messages.push("you hit the ".to_string() + &obs.object().to_string()),
             None => self.process_move(level, &new_pos),
         }
     }
     fn process_move(&mut self, level: &mut Level, new_pos: &IPoint) {
-        level.move_entity(&self.player, *new_pos);
+        level.move_entity(self.player, *new_pos);
         self.update_memory(level);
     }
     fn update_memory(&mut self, level: &mut Level) {
         let player = level.get_entity(&self.player).unwrap();
-        let layout = level.build_layout();
-        let visible = PlayerData::visible_points(&layout, &player.position, self.range);
+        let visible = PlayerData::visible_points(level, &player.position(), self.range);
         let pixels: HashMap<IPoint, Pixel> =
             visible.iter()
-                .map(|k| (*k, PlayerData::build_mem_pixel(layout.tiles.get(k).unwrap())))
+                .map(|k| (*k, PlayerData::build_mem_pixel(level.tiles().get(k).unwrap())))
                 .collect();
 
-        match self.views.entry(level.idx) {
+        match self.views.entry(*level.idx()) {
             Entry::Occupied(mut e) => { e.get_mut().extend(pixels); }
             Entry::Vacant(e) => { e.insert(pixels); }
         };
@@ -93,17 +92,16 @@ impl PlayerData {
     pub fn build_view(&self, game: &World) -> View {
         let level = game.get_entity_level(&self.player).unwrap();
         let player = level.get_entity(&self.player).unwrap();
-        let position = player.position;
+        let position = player.position();
 
-        let layout = level.build_layout();
-        let visible = PlayerData::visible_points(&layout, &position, self.range);
+        let visible = PlayerData::visible_points(level, &position, self.range);
 
         let mut current_pixels: HashMap<IPoint, Pixel> =
             visible.iter()
-                .map(|p| (*p, PlayerData::build_pixel(layout.tiles.get(p).unwrap())))
+                .map(|p| (*p, PlayerData::build_pixel(level.get_tile(p).unwrap())))
                 .collect();
 
-        match self.views.get(&level.idx) {
+        match self.views.get(&level.idx()) {
             None => (),
             Some(mem_pixels) => {
                 for (k, mem) in mem_pixels {
@@ -116,32 +114,32 @@ impl PlayerData {
         };
 
         View {
-            size: level.size,
+            size: *level.size(),
             tiles: current_pixels,
         }
     }
-    fn visible_points(layout: &Layout, pos: &IPoint, range: f32) -> HashSet<IPoint> {
+    fn visible_points(level: &Level, pos: &IPoint, range: f32) -> HashSet<IPoint> {
         let transparent: HashSet<IPoint> =
-            layout.tiles.iter()
-                .filter(|(k, vec)| k.dist(pos) < range + 2.0 && PlayerData::build_transparent(vec))
+            level.tiles().iter()
+                .filter(|(k, vec)| k.dist(pos) < range + 2.0 && PlayerData::is_transparent(vec))
                 .map(|(k, _vec)| *k)
                 .collect();
-        visibility_set(&transparent, &layout.size, pos, range)
+        visibility_set(&transparent, level.size(), pos, range)
     }
-    fn build_mem_pixel(tile: &Vec<&Entity>) -> Pixel {
+    fn build_mem_pixel(tile: &Vec<Entity>) -> Pixel {
         tile.iter()
-            .filter(|e| e.object.is_solid())
-            .max_by_key(|e| e.object.get_ordinal())
-            .map_or(Pixel::empty(), |o| o.object.get_pixel().gray())
+            .filter(|e| e.object().is_solid())
+            .max_by_key(|e| e.object().get_ordinal())
+            .map_or(Pixel::empty(), |o| o.object().get_pixel().gray())
     }
-    fn build_pixel(tile: &Vec<&Entity>) -> Pixel {
+    fn build_pixel(tile: &Vec<Entity>) -> Pixel {
         tile.iter()
-            .max_by_key(|e| e.object.get_ordinal())
-            .map_or(Pixel::empty(), |o| o.object.get_pixel())
+            .max_by_key(|e| e.object().get_ordinal())
+            .map_or(Pixel::empty(), |o| o.object().get_pixel())
     }
-    fn build_transparent(tile: &Vec<&Entity>) -> bool {
+    fn is_transparent(tile: &Vec<Entity>) -> bool {
         tile.iter()
-            .find(|e| e.object.is_opaque())
+            .find(|e| e.object().is_opaque())
             .is_none()
     }
     pub fn get_messages(&self) -> &Vec<String> {

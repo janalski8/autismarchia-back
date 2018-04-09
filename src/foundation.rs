@@ -5,7 +5,6 @@ use design::blueprint::Blueprint;
 use player::player::PlayerData;
 use serde_json;
 use state::object::Pixel;
-use print;
 
 
 pub struct GameState {
@@ -18,17 +17,16 @@ impl GameState {
         let mut game = World::new();
         let idx = game.next_id();
 
-        let level = game.create_level(&Blueprint::example(size));
-        let empty;
-        let layout = level.build_layout();
-        let opt = level.size.zrange().iterator().filter(|p|
-            layout.tiles.get(p).unwrap().iter().filter(|t| t.object.is_blocking()).next().is_none()
+        let level = game.level_from_blueprint(&Blueprint::example(size));
+
+        let empty_tile = level.tiles().iter().filter(|(_p, tile)|
+            !tile.iter().any(|e| e.object().is_blocking())
         ).next();
-        empty = match opt {
+        let empty_pos = match empty_tile {
             None => panic!(),
-            Some(p) => p
+            Some(p) => p.0
         };
-        level.add_entity(Object::Player { idx }, empty);
+        level.add_entity(Object::Player { idx }, *empty_pos);
 
         GameState {
             game,

@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use state::object::{Idx, TObject};
+use state::object::Idx;
 use state::world::World;
 use utils::ipoint::IPoint;
 use state::level::Level;
 use state::object::Pixel;
-use std::collections::HashSet;
-use logic::visibility::visibility_set;
-use utils::point::Point;
+use state::context::Action;
 use state::level::Entity;
-
 
 pub struct View {
     pub tiles: HashMap<IPoint, Pixel>,
@@ -33,7 +30,18 @@ impl PlayerData {
         }
 
     }
+
+    pub fn wait<'a>(&mut self, game: &'a mut World) {
+        let entity_idx = game.lapse_time().unwrap().object().get_idx();
+        if entity_idx != self.player {
+            game.invoke_actions(entity_idx);
+            self.wait(game)
+        }
+    }
+
     pub fn process_key(&mut self, game: &mut World, string: &str) {
+        self.wait(game);
+
         let dir: IPoint = match string {
             "w" => IPoint {x: 0, y: -1},
             "s" => IPoint {x: 0, y: 1},
@@ -42,63 +50,66 @@ impl PlayerData {
             _ => return,
         };
 
-        let level = match game.get_mut_entity_level(&self.player) {
-            Some(lvl) => lvl,
-            None => {
-                self.messages.push("you're not in the game!".to_string());
-                return;
-            }
-        };
+        let player = game.get_mut_entity(self.player).unwrap();
+        let position = player.position();
+        match player.object_mut().as_player() {
+            None => {panic!()},
+            Some(p) => {
+                p.set_action(Action::Walk {
+                    idx: self.player,
+                    position: dir + position
+                });
+            },
+        }
 
-        let ref entity = match level.get_entity(&self.player) {
-            Some(entity) => entity,
-            _ => {
-                self.messages.push("you can't move!".to_string());
-                return;
-            }
-        };
-
-        let position = *entity.position();
-        let new_pos = level.size().zrange().clip(&(dir + position));
-        if new_pos == position {
+        /*
+        let level = game.get_mut_entity_level(self.player).unwrap();
+        let entity = level.get_mut_entity(self.player).unwrap();
+        let position = entity.position();
+        let new_pos = dir + position;
+        if !level.size().zrange().inside(new_pos) {
             self.messages.push("you hit the wall".to_string());
             return;
         }
 
-        let tile = level.get_tile(&new_pos).unwrap();
+        let tile = level.get_tile(new_pos).unwrap();
         let obstacle = tile.iter().filter(|e| e.object().is_blocking()).next();
         match obstacle {
-            Some(obs) => self.messages.push("you hit the ".to_string() + &obs.object().to_string()),
-            None => self.process_move(level, &new_pos),
-        }
+            Some(obs) => self.messages.push("you hit the ".to_string() + &obs.object().name()),
+            None => entity.object_mut().set_action(Action::Walk{
+                idx: self.player,
+                position: new_pos,
+            })
+        }*/
+        game.invoke_actions(self.player);
+        self.wait(game);
+        self.update_memory(game.get_mut_entity_level(self.player).unwrap());
     }
-    fn process_move(&mut self, level: &mut Level, new_pos: &IPoint) {
-        level.move_entity(self.player, *new_pos);
-        self.update_memory(level);
-    }
+
     fn update_memory(&mut self, level: &mut Level) {
-        let player = level.get_entity(&self.player).unwrap();
-        let visible = PlayerData::visible_points(level, &player.position(), self.range);
+        let player = level.get_entity(self.player).unwrap();
+        let visible = level.visible_points(player.position(), self.range);
         let pixels: HashMap<IPoint, Pixel> =
             visible.iter()
-                .map(|k| (*k, PlayerData::build_mem_pixel(level.tiles().get(k).unwrap())))
+                .map(|k| (*k, Level::build_mem_pixel(level.tiles().get(k).unwrap())))
                 .collect();
 
-        match self.views.entry(*level.idx()) {
+        match self.views.entry(level.idx()) {
             Entry::Occupied(mut e) => { e.get_mut().extend(pixels); }
             Entry::Vacant(e) => { e.insert(pixels); }
         };
     }
+
     pub fn build_view(&self, game: &World) -> View {
-        let level = game.get_entity_level(&self.player).unwrap();
-        let player = level.get_entity(&self.player).unwrap();
+        let level = game.get_entity_level(self.player).unwrap();
+        let player = level.get_entity(self.player).unwrap();
         let position = player.position();
 
-        let visible = PlayerData::visible_points(level, &position, self.range);
+        let visible = level.visible_points(position, self.range);
 
         let mut current_pixels: HashMap<IPoint, Pixel> =
-            visible.iter()
-                .map(|p| (*p, PlayerData::build_pixel(level.get_tile(p).unwrap())))
+            visible.into_iter()
+                .map(|p| (p, Level::build_pixel(level.get_tile(p).unwrap())))
                 .collect();
 
         match self.views.get(&level.idx()) {
@@ -114,36 +125,12 @@ impl PlayerData {
         };
 
         View {
-            size: *level.size(),
+            size: level.size(),
             tiles: current_pixels,
         }
     }
-    fn visible_points(level: &Level, pos: &IPoint, range: f32) -> HashSet<IPoint> {
-        let transparent: HashSet<IPoint> =
-            level.tiles().iter()
-                .filter(|(k, vec)| k.dist(pos) < range + 2.0 && PlayerData::is_transparent(vec))
-                .map(|(k, _vec)| *k)
-                .collect();
-        visibility_set(&transparent, level.size(), pos, range)
-    }
-    fn build_mem_pixel(tile: &Vec<Entity>) -> Pixel {
-        tile.iter()
-            .filter(|e| e.object().is_solid())
-            .max_by_key(|e| e.object().get_ordinal())
-            .map_or(Pixel::empty(), |o| o.object().get_pixel().gray())
-    }
-    fn build_pixel(tile: &Vec<Entity>) -> Pixel {
-        tile.iter()
-            .max_by_key(|e| e.object().get_ordinal())
-            .map_or(Pixel::empty(), |o| o.object().get_pixel())
-    }
-    fn is_transparent(tile: &Vec<Entity>) -> bool {
-        tile.iter()
-            .find(|e| e.object().is_opaque())
-            .is_none()
-    }
+
     pub fn get_messages(&self) -> &Vec<String> {
         &self.messages
     }
-
 }

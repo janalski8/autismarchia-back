@@ -25,13 +25,13 @@ impl Display for FPoint {
 
 
 impl FPoint {
-    pub fn bottom(&self, other: &FPoint) -> FPoint {
+    pub fn bottom(&self, other: FPoint) -> FPoint {
         FPoint {
             x: self.x.min(other.x),
             y: self.y.min(other.y)
         }
     }
-    pub fn top(&self, other: &FPoint) -> FPoint {
+    pub fn top(&self, other: FPoint) -> FPoint {
         FPoint {
             x: self.x.max(other.x),
             y: self.y.max(other.y)
@@ -55,20 +55,20 @@ impl FPoint {
             y: self.y.floor() as i32
         }
     }
-    pub fn rdist(&self, to: &FPoint) -> f32 {
+    pub fn rdist(&self, to: FPoint) -> f32 {
         (self.x - to.x).abs() + (self.y - to.y).abs()
     }
 }
 
 impl Point<IPoint> for FPoint {
-    fn dist(&self, other: &IPoint) -> f32 {
+    fn dist(self, other: IPoint) -> f32 {
         let dx = self.x - (other.x as f32);
         let dy = self.y - (other.y as f32);
         (dx*dx + dy*dy).sqrt()
     }
 }
 impl Point<FPoint> for FPoint {
-    fn dist(&self, other: &FPoint) -> f32 {
+    fn dist(self, other: FPoint) -> f32 {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         (dx*dx + dy*dy).sqrt()

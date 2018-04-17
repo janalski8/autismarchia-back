@@ -1,6 +1,7 @@
 #![feature(nll)]
 extern crate rand;
 extern crate core;
+extern crate ordered_float;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -14,6 +15,7 @@ mod player;
 mod state;
 mod utils;
 mod foundation;
+mod objects;
 
 use std::ffi::CString;
 use std::ffi::CStr;

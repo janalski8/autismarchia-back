@@ -32,13 +32,13 @@ impl IPoint {
             y: 0
         }
     }
-    pub fn bottom(&self, other: &IPoint) -> IPoint {
+    pub fn bottom(&self, other: IPoint) -> IPoint {
         IPoint {
             x: self.x.min(other.x),
             y: self.y.min(other.y)
         }
     }
-    pub fn top(&self, other: &IPoint) -> IPoint {
+    pub fn top(&self, other: IPoint) -> IPoint {
         IPoint {
             x: self.x.max(other.x),
             y: self.y.max(other.y)
@@ -49,9 +49,6 @@ impl IPoint {
             x: self.x as f32,
             y: self.y as f32
         }
-    }
-    pub fn rdist(&self, to: &IPoint) -> i32 {
-        (self.x - to.x).abs() + (self.y - to.y).abs()
     }
     pub fn range(self, to: IPoint) -> IRange {
         IRange {start: self, end: to}
@@ -65,17 +62,34 @@ impl IPoint {
             end: self + IPoint{x: radius + 1, y: radius + 1}
         }
     }
+    pub fn neumann_dist(&self, to: IPoint) -> i32 {
+        (self.x - to.x).abs() + (self.y - to.y).abs()
+    }
+    pub fn neumann_surrounding(&self) -> Vec<IPoint> {
+        vec![
+            IPoint{x: self.x+1, y: self.y},
+            IPoint{x: self.x, y: self.y+1},
+            IPoint{x: self.x-1, y: self.y},
+            IPoint{x: self.x, y: self.y-1},
+        ]
+    }
+    pub fn abs(self) -> IPoint {
+        IPoint {
+            x: self.x.abs(),
+            y: self.y.abs()
+        }
+    }
 }
 
 impl Point<IPoint> for IPoint {
-    fn dist(&self, other: &IPoint) -> f32 {
+    fn dist(self, other: IPoint) -> f32 {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         ((dx*dx + dy*dy) as f32).sqrt()
     }
 }
 impl Point<FPoint> for IPoint {
-    fn dist(&self, other: &FPoint) -> f32 {
+    fn dist(self, other: FPoint) -> f32 {
         let dx = (self.x as f32) - other.x;
         let dy = (self.y as f32) - other.y;
         (dx*dx + dy*dy).sqrt()
@@ -139,7 +153,7 @@ impl Mul<i32> for IPoint {
 
 impl Hash for IPoint {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.x.hash(state);
-        self.y.hash(state);
+        state.write_i32(self.x);
+        state.write_i32(self.y);
     }
 }

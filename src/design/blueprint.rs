@@ -8,6 +8,10 @@ use rand::SeedableRng;
 use utils::ipoint::IPoint;
 use utils::irange::IRange;
 use utils::pointrng::PointRng;
+use state::world::World;
+use state::level::Level;
+use objects::wall::Wall;
+use objects::floor::Floor;
 
 #[derive(Debug)]
 pub enum Tile {
@@ -15,12 +19,12 @@ pub enum Tile {
 }
 pub type TileMap = HashMap<IPoint, Tile>;
 pub trait Tiles {
-    fn build_room(&mut self, room: &IRange);
+    fn build_room(&mut self, room: IRange);
     fn build_xline(&mut self, x: i32, y1: i32, y2: i32);
     fn build_yline(&mut self, x1: i32, x2: i32, y: i32);
 }
 impl Tiles for TileMap {
-    fn build_room(&mut self, room: &IRange) {
+    fn build_room(&mut self, room: IRange) {
         for point in room.iter() {
             self.insert(point, Tile::Room);
         }
@@ -50,10 +54,10 @@ impl Blueprint {
     pub fn example(size: IPoint) -> Blueprint {
         let mut bp = Blueprint::new(size);
         for _ in 0..7 {
-            bp.try_add_room(&IPoint { x: 3, y: 3 }.range(IPoint { x: 12, y: 12 }), 5);
+            bp.try_add_room(IPoint { x: 3, y: 3 }.range(IPoint { x: 12, y: 12 }), 5);
         }
         for _ in 0..4 {
-            bp.try_add_room(&IPoint { x: 1, y: 1 }.range(IPoint { x: 2, y: 2 }), 5);
+            bp.try_add_room(IPoint { x: 1, y: 1 }.range(IPoint { x: 2, y: 2 }), 5);
         }
         bp.build_rooms();
         bp.connect_tree();
@@ -69,22 +73,22 @@ impl Blueprint {
         }
     }
     pub fn build_rooms(&mut self) {
-        let rooms = &self.rooms;
+        let rooms = &mut self.rooms;
         let tiles = &mut self.tiles;
         for room in rooms {
-            tiles.build_room(room);
+            tiles.build_room(*room);
         }
     }
-    pub fn try_add_room(&mut self, size_range: &IRange, mindist: i32) {
+    pub fn try_add_room(&mut self, size_range: IRange, mindist: i32) {
         let mut room = None;
         for _ in 1..100 {
             let size = self.random.gen_in_range(size_range);
-            let end = self.random.gen_in_range(&size.range(self.size));
+            let end = self.random.gen_in_range(size.range(self.size));
             let start = end - size;
             let newroom = IRange {start, end};
             let dist = self.rooms.iter().fold(
                 i32::max_value(),
-                |acc, x| cmp::min(acc, newroom.rdist(x))
+                |acc, x| cmp::min(acc, newroom.rdist(*x))
             );
             if dist >= mindist {
                 room = Some(newroom);
@@ -131,7 +135,7 @@ impl Blueprint {
             let mut best_parent = 0;
             for (parent, _) in tree.iter().enumerate().filter(|&(_i, &x)| x < len) {
                 for (child, _) in tree.iter().enumerate().filter(|&(_i, &x)| x == len) {
-                    let dist = (&self.rooms[child]).rdist(&self.rooms[parent]);
+                    let dist = (&self.rooms[child]).rdist(self.rooms[parent]);
                     if dist < best_dist {
                         best_dist = dist;
                         best_parent = parent;
@@ -146,5 +150,19 @@ impl Blueprint {
             let p2 = self.rooms[parent].center().floor();
             self.connect_points(p1, p2);
         }
+    }
+
+    pub fn level_from_blueprint<'a>(&self, world: &'a mut World) -> &'a mut Level {
+        let mut level = Level::new(world.next_id(), self.size);
+        for point in self.size.zrange().iter() {
+            if self.tiles.get(&point).is_none() {
+                let object = Wall::new(world.next_id());
+                level.add_entity(Box::new(object), point);
+            } else {
+                let object = Floor::new(world.next_id());
+                level.add_entity(Box::new(object), point);
+            }
+        }
+        world.add_level(level)
     }
 }

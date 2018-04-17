@@ -1,10 +1,13 @@
 use utils::ipoint::IPoint;
-use state::object::{Object, TObject};
 use state::world::World;
 use design::blueprint::Blueprint;
 use player::player::PlayerData;
-use serde_json;
 use state::object::Pixel;
+use state::object::Object;
+use serde_json;
+use objects::player::Player;
+use print_raw;
+use print;
 
 
 pub struct GameState {
@@ -17,7 +20,7 @@ impl GameState {
         let mut game = World::new();
         let idx = game.next_id();
 
-        let level = game.level_from_blueprint(&Blueprint::example(size));
+        let level = Blueprint::example(size).level_from_blueprint(&mut game);
 
         let empty_tile = level.tiles().iter().filter(|(_p, tile)|
             !tile.iter().any(|e| e.object().is_blocking())
@@ -26,7 +29,7 @@ impl GameState {
             None => panic!(),
             Some(p) => p.0
         };
-        level.add_entity(Object::Player { idx }, *empty_pos);
+        level.add_entity(Box::new(Player::new(idx)), *empty_pos);
 
         GameState {
             game,
@@ -34,6 +37,7 @@ impl GameState {
         }
     }
     pub fn process_key(&mut self, string: &str) {
+        //print("press key".to_string());
         self.player.process_key(&mut self.game, string);
     }
     pub fn get_view(&mut self) -> String {

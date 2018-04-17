@@ -8,22 +8,22 @@ pub fn dev() -> f32 {
 }
 
 pub fn visibility_set(transparent: &HashSet<IPoint>,
-                      size: &IPoint,
-                      origin: &IPoint,
+                      size: IPoint,
+                      origin: IPoint,
                       sight_range: f32) -> HashSet<IPoint> {
 
     let origin_square = origin.square_around(sight_range.ceil() as i32);
     let room_range = size.zrange();
-    let candidates = origin_square.intersect(&room_range);
-    let mut result: HashSet<IPoint> = candidates.iter()
+    let candidates = origin_square.intersect(room_range);
+    let mut result: HashSet<IPoint> = candidates.into_iter()
         .filter(|p| p.dist(origin) <= sight_range)
-        .filter(|p| is_visible(transparent, origin, p))
+        .filter(|p| is_visible(transparent, origin, *p))
         .collect();
-    result.insert(*origin);
+    result.insert(origin);
     result
 }
 
-pub fn is_visible(transparent: &HashSet<IPoint>, from: &IPoint, to: &IPoint) -> bool {
+pub fn is_visible(transparent: &HashSet<IPoint>, from: IPoint, to: IPoint) -> bool {
     sight_paths(from, to).iter().find(|(from_alt, to_alt)|
         line_of_sight(*from_alt, *to_alt)
             .iter()
@@ -32,13 +32,13 @@ pub fn is_visible(transparent: &HashSet<IPoint>, from: &IPoint, to: &IPoint) -> 
     ).is_some()
 }
 
-fn sight_paths(p1: &IPoint, p2: &IPoint) -> Vec<(FPoint, FPoint)> {
+fn sight_paths(p1: IPoint, p2: IPoint) -> Vec<(FPoint, FPoint)> {
     vec![
         (p1.float(), p2.float()),
-        (p1.float(), *p2 + FPoint{x: 0.0, y: dev()}),
-        (p1.float(), *p2 + FPoint{x: 0.0, y: -dev()}),
-        (p1.float(), *p2 + FPoint{x: dev(),  y: 0.0}),
-        (p1.float(), *p2 + FPoint{x: -dev(), y: 0.0}),
+        (p1.float(), p2 + FPoint{x: 0.0, y: dev()}),
+        (p1.float(), p2 + FPoint{x: 0.0, y: -dev()}),
+        (p1.float(), p2 + FPoint{x: dev(),  y: 0.0}),
+        (p1.float(), p2 + FPoint{x: -dev(), y: 0.0}),
     ]
 }
 
